@@ -5,29 +5,19 @@ import {
   Grid,
   Card,
   Fade,
-  IconButton,
-  Chip,
   TextField,
   Stack,
   Select,
   MenuItem,
   FormControl,
   InputLabel,
-  ToggleButtonGroup,
-  ToggleButton,
-  InputAdornment,
-  Pagination,
   Rating,
-  CircularProgress
+  CircularProgress,
+  InputAdornment,
+  Chip
 } from '@mui/material';
-import { Search, Download, Play } from 'lucide-react';
-import jellyfinApi from '../../services/jellyfinApi';
-
-const MEDIA_TYPES = [
-  { value: 'Movie', label: 'Movies' },
-  { value: 'Series', label: 'TV Shows' },
-  { value: 'MusicAlbum', label: 'Music' }
-];
+import { Search } from 'lucide-react';
+import jellyfinApi from '../../services/jellyfinApi';  // Add this import
 
 const SORT_OPTIONS = [
   { value: 'SortName', label: 'Name' },
@@ -37,34 +27,35 @@ const SORT_OPTIONS = [
   { value: 'Runtime', label: 'Duration' }
 ];
 
-const QUALITY_OPTIONS = [
-    { value: 'all', label: 'All Qualities' },
-    { value: '4k', label: '4K' },
-    { value: 'hdr', label: 'HDR' },
-    { value: '1080p', label: '1080p' }
+const FILTER_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: '4k', label: '4K' },
+  { value: 'hdr', label: 'HDR' },
+  { value: 'played', label: 'Watched' },
+  { value: 'unplayed', label: 'Unwatched' }
 ];
 
-function MediaCard({ item }) {
+function MediaCard({ item, onSelect }) {
   const [isHovered, setIsHovered] = useState(false);
   const imageUrl = jellyfinApi.getImageUrl(item.Id);
   
   return (
     <Card 
-    sx={{ 
+      onClick={() => onSelect(item.Id)}
+      sx={{ 
         position: 'relative',
         paddingTop: '150%',
         backgroundColor: 'background.paper',
-        borderRadius: 1,
-        transition: 'transform 0.2s',
-        cursor: 'pointer', // Add pointer cursor
+        cursor: 'pointer',
         '&:hover': {
-        transform: 'scale(1.02)',
-        zIndex: 1
-        }
-    }}
-    onClick={() => onMovieClick(item.Id)} // Add click handler
+          transform: 'scale(1.02)',
+          zIndex: 1
+        },
+        transition: 'transform 0.2s'
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Poster Image */}
       <Box
         component="img"
         src={imageUrl}
@@ -75,12 +66,13 @@ function MediaCard({ item }) {
           left: 0,
           width: '100%',
           height: '100%',
-          objectFit: 'cover'
+          objectFit: 'cover',
+          filter: isHovered ? 'brightness(0.3)' : 'none',
+          transition: 'filter 0.2s'
         }}
       />
       
-      {/* Hover Overlay */}
-      <Fade in={isHovered}>
+      {isHovered && (
         <Box
           sx={{
             position: 'absolute',
@@ -88,100 +80,86 @@ function MediaCard({ item }) {
             left: 0,
             right: 0,
             bottom: 0,
-            bgcolor: 'rgba(0, 0, 0, 0.8)',
+            p: 2,
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'space-between',
-            p: 1.5
+            justifyContent: 'center',
+            alignItems: 'center',
+            textAlign: 'center'
           }}
         >
-          <Box>
-            <Typography 
-              variant="subtitle1" 
-              sx={{ 
-                color: 'white',
-                mb: 0.5,
-                fontWeight: 500,
-                lineHeight: 1.2
-              }}
-            >
-              {item.Name}
-            </Typography>
-            <Typography 
-              variant="caption" 
-              sx={{ color: 'grey.400' }}
-            >
-              {item.ProductionYear}
-            </Typography>
-            {item.CommunityRating && (
-              <Box sx={{ mt: 1 }}>
-                <Rating 
-                  value={item.CommunityRating / 2}
-                  precision={0.5}
-                  size="small"
-                  readOnly
-                />
-              </Box>
-            )}
-          </Box>
-
-          <Stack direction="row" spacing={1} justifyContent="center">
-            <IconButton 
-              size="small"
-              sx={{ 
-                color: 'white',
-                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.1)' }
-              }}
-              onClick={() => console.log('Play:', item.Id)}
-            >
-              <Play size={20} />
-            </IconButton>
-            <IconButton 
-              size="small"
-              sx={{ 
-                color: 'white',
-                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.1)' }
-              }}
-              onClick={() => console.log('Download:', item.Id)}
-            >
-              <Download size={20} />
-            </IconButton>
-          </Stack>
+          <Typography 
+            variant="h6" 
+            color="white"
+            sx={{ mb: 1 }}
+          >
+            {item.Name}
+          </Typography>
+          <Typography 
+            variant="body2" 
+            color="grey.300"
+            sx={{ mb: 1 }}
+          >
+            {item.ProductionYear}
+          </Typography>
+          {item.CommunityRating && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Rating 
+                value={item.CommunityRating / 2}
+                precision={0.5}
+                size="small"
+                readOnly
+              />
+              <Typography 
+                variant="body2" 
+                color="grey.300"
+              >
+                {(item.CommunityRating / 2).toFixed(1)}
+              </Typography>
+            </Box>
+          )}
         </Box>
-      </Fade>
+      )}
     </Card>
   );
 }
 
-function Library() {
+function Library({ onMovieSelect }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [mediaType, setMediaType] = useState('Movie');
-  const [sortBy, setSortBy] = useState('SortName');
-  const [sortOrder, setSortOrder] = useState('Ascending');
-  const [page, setPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const ITEMS_PER_PAGE = 30;
+  const [filters, setFilters] = useState({
+    sort: 'SortName',
+    filter: 'all',
+    search: ''
+  });
 
   useEffect(() => {
     loadLibraryItems();
-  }, [mediaType, sortBy, sortOrder, page, searchTerm]);
+  }, [filters]);
 
   const loadLibraryItems = async () => {
     try {
       setLoading(true);
-      const result = await jellyfinApi.getItems({
-        includeItemTypes: mediaType,
-        sortBy,
-        sortOrder,
-        searchTerm,
-        startIndex: (page - 1) * ITEMS_PER_PAGE,
-        limit: ITEMS_PER_PAGE
-      });
+      const params = {
+        sortBy: filters.sort,
+        sortOrder: 'Ascending',
+        includeItemTypes: 'Movie',
+        searchTerm: filters.search
+      };
+
+      // Add specific filters
+      if (filters.filter === '4k') {
+        params.minWidth = 3840;
+      } else if (filters.filter === 'hdr') {
+        params.hasHdr = true;
+      } else if (filters.filter === 'played') {
+        params.isPlayed = true;
+      } else if (filters.filter === 'unplayed') {
+        params.isPlayed = false;
+      }
+
+      const result = await jellyfinApi.getItems(params);
       setItems(result.Items);
-      setTotalItems(result.TotalRecordCount);
     } catch (error) {
       console.error('Failed to load library:', error);
     } finally {
@@ -192,50 +170,17 @@ function Library() {
   return (
     <Box sx={{ p: 3 }}>
       <Stack spacing={3}>
-        {/* Header with Media Type Selection */}
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 2
-        }}>
-          <Typography variant="h5" fontWeight="500">
-            Media Library
-          </Typography>
-          
-          <ToggleButtonGroup
-            value={mediaType}
-            exclusive
-            onChange={(_, newType) => newType && setMediaType(newType)}
-            size="small"
-          >
-            {MEDIA_TYPES.map(type => (
-              <ToggleButton 
-                key={type.value} 
-                value={type.value}
-              >
-                {type.label}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Box>
-
-        {/* Search and Sort Controls */}
+        {/* Search and Filters */}
         <Stack 
           direction="row" 
           spacing={2} 
-          alignItems="center"
-          flexWrap="wrap"
-          useFlexGap
-          sx={{ pb: 1 }}
+          sx={{ mb: 3 }}
         >
           <TextField
             placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            size="small"
-            sx={{ minWidth: 200 }}
+            value={filters.search}
+            onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+            sx={{ width: 300 }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -245,12 +190,12 @@ function Library() {
             }}
           />
 
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <FormControl sx={{ minWidth: 120 }}>
             <InputLabel>Sort By</InputLabel>
             <Select
-              value={sortBy}
+              value={filters.sort}
               label="Sort By"
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => setFilters(prev => ({ ...prev, sort: e.target.value }))}
             >
               {SORT_OPTIONS.map(option => (
                 <MenuItem key={option.value} value={option.value}>
@@ -260,15 +205,20 @@ function Library() {
             </Select>
           </FormControl>
 
-          <ToggleButtonGroup
-            value={sortOrder}
-            exclusive
-            onChange={(_, newOrder) => newOrder && setSortOrder(newOrder)}
-            size="small"
-          >
-            <ToggleButton value="Ascending">A-Z</ToggleButton>
-            <ToggleButton value="Descending">Z-A</ToggleButton>
-          </ToggleButtonGroup>
+          <FormControl sx={{ minWidth: 120 }}>
+            <InputLabel>Filter</InputLabel>
+            <Select
+              value={filters.filter}
+              label="Filter"
+              onChange={(e) => setFilters(prev => ({ ...prev, filter: e.target.value }))}
+            >
+              {FILTER_OPTIONS.map(option => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </Stack>
 
         {/* Media Grid */}
@@ -277,43 +227,16 @@ function Library() {
             <CircularProgress />
           </Box>
         ) : (
-          <>
-            <Grid container spacing={2}>
-              {items.map((item) => (
-                <Grid item key={item.Id} xs={6} sm={4} md={3} lg={2}>
-                  <MediaCard item={item} />
-                </Grid>
-              ))}
-            </Grid>
-
-            {/* Pagination */}
-            {totalItems > ITEMS_PER_PAGE && (
-              <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'center',
-                pt: 2 
-              }}>
-                <Pagination
-                  count={Math.ceil(totalItems / ITEMS_PER_PAGE)}
-                  page={page}
-                  onChange={(_, newPage) => setPage(newPage)}
-                  color="primary"
-                  size="large"
+          <Grid container spacing={2}>
+            {items.map((item) => (
+              <Grid item key={item.Id} xs={6} sm={4} md={3} lg={2}>
+                <MediaCard 
+                  item={item} 
+                  onSelect={onMovieSelect}
                 />
-              </Box>
-            )}
-
-            {/* Empty State */}
-            {items.length === 0 && (
-              <Typography 
-                variant="body1" 
-                color="text.secondary" 
-                sx={{ textAlign: 'center', py: 4 }}
-              >
-                No media items found
-              </Typography>
-            )}
-          </>
+              </Grid>
+            ))}
+          </Grid>
         )}
       </Stack>
     </Box>

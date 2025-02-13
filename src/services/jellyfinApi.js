@@ -15,14 +15,23 @@ class JellyfinApi {
     
     this.serverUrl = '';
     this.accessToken = '';
+    this.currentUser = null;
+    this.isOffline = false;
+    this.lastSyncTime = localStorage.getItem('lastSyncTime');
   }
 
   generateDeviceId() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const savedDeviceId = localStorage.getItem('deviceId');
+    if (savedDeviceId) return savedDeviceId;
+
+    const newDeviceId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = Math.random() * 16 | 0;
       const v = c === 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
     });
+
+    localStorage.setItem('deviceId', newDeviceId);
+    return newDeviceId;
   }
 
   getAuthHeader(token = '') {
@@ -41,22 +50,110 @@ class JellyfinApi {
   }
 
   setServerUrl(url) {
-    this.serverUrl = url.replace(/\/+$/, '');
+    // Normalize URL (remove trailing slashes, ensure protocol)
+    let normalizedUrl = url.trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(normalizedUrl)) {
+      normalizedUrl = `http://${normalizedUrl}`;
+    }
+    
+    this.serverUrl = normalizedUrl;
     this.axios.defaults.baseURL = this.serverUrl;
+    localStorage.setItem('serverUrl', this.serverUrl);
   }
 
   setAccessToken(token) {
     this.accessToken = token;
     this.axios.defaults.headers['X-Emby-Authorization'] = this.getAuthHeader(token);
+    if (token) {
+      localStorage.setItem('accessToken', token);
+    } else {
+      localStorage.removeItem('accessToken');
+    }
   }
 
-  async getPublicSystemInfo() {
+  async discoverServers() {
     try {
-      const response = await this.axios.get('/System/Info/Public');
+      // Try multiple discovery methods
+      const servers = [];
+
+      // Method 1: SSDP discovery
+      try {
+        const response = await axios.get('https://localhost:7359/jellyfin/discovery');
+        if (response.data) {
+          servers.push(...response.data);
+        }
+      } catch (e) {
+        console.log('SSDP discovery failed:', e);
+      }
+
+      // Method 2: Common local addresses
+      const localPorts = ['8096', '8920'];
+      const localAddresses = ['localhost', '127.0.0.1'];
+      
+      for (const address of localAddresses) {
+        for (const port of localPorts) {
+          try {
+            const url = `http://${address}:${port}`;
+            const response = await axios.get(`${url}/System/Info/Public`, {
+              headers: { 'X-Emby-Authorization': this.getAuthHeader() },
+              timeout: 1000
+            });
+            if (response.data) {
+              servers.push({
+                url,
+                info: response.data
+              });
+            }
+          } catch (e) {
+            // Skip failed attempts
+          }
+        }
+      }
+
+      return servers;
+    } catch (error) {
+      console.error('Server discovery failed:', error);
+      return [];
+    }
+  }
+
+  async testConnection(url) {
+    try {
+      const testUrl = url.trim().replace(/\/+$/, '');
+      const response = await axios.get(`${testUrl}/System/Info/Public`, {
+        headers: {
+          'X-Emby-Authorization': this.getAuthHeader()
+        },
+        timeout: 5000
+      });
+      return {
+        success: true,
+        serverInfo: response.data
+      };
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      
+      // Check if we have offline data available
+      const hasOfflineData = localStorage.getItem('offlineData');
+      if (hasOfflineData && this.lastSyncTime) {
+        return {
+          success: true,
+          offline: true,
+          lastSync: this.lastSyncTime
+        };
+      }
+      
+      throw new Error('Unable to connect to server');
+    }
+  }
+
+  async getPublicUsers() {
+    try {
+      const response = await this.axios.get('/Users/Public');
       return response.data;
     } catch (error) {
-      console.error('System info error:', error);
-      throw new Error('Unable to connect to server');
+      console.error('Failed to get public users:', error);
+      throw new Error('Unable to retrieve users');
     }
   }
 
@@ -65,14 +162,10 @@ class JellyfinApi {
       const response = await this.axios.post('/Users/AuthenticateByName', {
         Username: username,
         Pw: password
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Emby-Authorization': this.getAuthHeader()
-        }
       });
       
       this.setAccessToken(response.data.AccessToken);
+      this.currentUser = response.data.User;
       
       return {
         user: response.data.User,
@@ -83,7 +176,34 @@ class JellyfinApi {
       if (error.response?.status === 401) {
         throw new Error('Invalid username or password');
       }
-      throw new Error('Authentication failed: ' + (error.response?.data?.message || error.message));
+      throw new Error('Authentication failed');
+    }
+  }
+
+  async authenticateByQuickConnect(secret) {
+    try {
+      const response = await this.axios.post('/QuickConnect/Connect', {
+        Secret: secret
+      });
+      
+      if (response.data.Authenticated) {
+        const authResult = await this.axios.get('/QuickConnect/Token', {
+          params: { Secret: secret }
+        });
+        
+        this.setAccessToken(authResult.data.AccessToken);
+        this.currentUser = authResult.data.User;
+        
+        return {
+          user: authResult.data.User,
+          accessToken: authResult.data.AccessToken
+        };
+      }
+      
+      throw new Error('Quick Connect authentication failed');
+    } catch (error) {
+      console.error('Quick Connect error:', error);
+      throw new Error('Quick Connect failed');
     }
   }
 
@@ -94,6 +214,7 @@ class JellyfinApi {
 
     try {
       const response = await this.axios.get('/Users/Me');
+      this.currentUser = response.data;
       return response.data;
     } catch (error) {
       console.error('Get user error:', error);
@@ -101,52 +222,153 @@ class JellyfinApi {
     }
   }
 
-  async getItems({
-    includeItemTypes = 'Movie',
-    sortBy = 'SortName',
-    sortOrder = 'Ascending',
-    filters = [],
-    searchTerm = '',
-    startIndex = 0,
-    limit = 50,
-    isPlayed,
-    minWidth
-  } = {}) {
-    if (!this.accessToken) {
+  setOfflineMode(enabled) {
+    this.isOffline = enabled;
+    localStorage.setItem('offlineMode', enabled ? 'true' : 'false');
+  }
+
+  async syncOfflineData() {
+    if (this.isOffline) return;
+
+    try {
+      // Sync viewed status and progress
+      const offlineProgress = JSON.parse(localStorage.getItem('offlineProgress') || '{}');
+      for (const [itemId, progress] of Object.entries(offlineProgress)) {
+        if (!progress.synced) {
+          await this.axios.post(`/Items/${itemId}/PlayingProgress`, progress);
+          offlineProgress[itemId].synced = true;
+        }
+      }
+      localStorage.setItem('offlineProgress', JSON.stringify(offlineProgress));
+
+      // Update last sync time
+      this.lastSyncTime = new Date().toISOString();
+      localStorage.setItem('lastSyncTime', this.lastSyncTime);
+    } catch (error) {
+      console.error('Failed to sync offline data:', error);
+      throw error;
+    }
+  }
+
+  async getItems(params = {}) {
+    if (!this.accessToken && !this.isOffline) {
       throw new Error('Not authenticated');
     }
 
     try {
-      const params = {
-        SortBy: sortBy,
-        SortOrder: sortOrder,
-        IncludeItemTypes: includeItemTypes,
-        Recursive: true,
-        Fields: 'Overview,CommunityRating,CriticRating,DateCreated,DatePlayed,Width,Height,MediaSources',
-        StartIndex: startIndex,
-        Limit: limit,
-        SearchTerm: searchTerm
-      };
+      if (this.isOffline) {
+        // Return cached items in offline mode
+        const cachedItems = JSON.parse(localStorage.getItem('offlineItems') || '[]');
+        let items = [...cachedItems];
 
-      // Add optional filters
-      if (filters.length > 0) {
-        params.Filters = filters.join(',');
+        // Apply filters
+        if (params.searchTerm) {
+          const searchLower = params.searchTerm.toLowerCase();
+          items = items.filter(item => 
+            item.Name.toLowerCase().includes(searchLower)
+          );
+        }
+
+        // Apply sorting
+        if (params.sortBy) {
+          items.sort((a, b) => {
+            const aVal = a[params.sortBy] || '';
+            const bVal = b[params.sortBy] || '';
+            return params.sortOrder === 'Descending' 
+              ? String(bVal).localeCompare(String(aVal))
+              : String(aVal).localeCompare(String(bVal));
+          });
+        }
+
+        // Apply pagination
+        if (params.startIndex !== undefined && params.limit) {
+          items = items.slice(params.startIndex, params.startIndex + params.limit);
+        }
+
+        return {
+          Items: items,
+          TotalRecordCount: cachedItems.length
+        };
       }
 
-      if (isPlayed !== undefined) {
-        params.IsPlayed = isPlayed;
+      // Online mode - API request
+      const response = await this.axios.get('/Items', {
+        params: {
+          SortBy: params.sortBy || 'SortName',
+          SortOrder: params.sortOrder || 'Ascending',
+          IncludeItemTypes: params.includeItemTypes || 'Movie',
+          Recursive: true,
+          Fields: 'Overview,CommunityRating,CriticRating,DateCreated,PremiereDate,ProductionYear,Path,MediaSources',
+          StartIndex: params.startIndex || 0,
+          Limit: params.limit || 50,
+          SearchTerm: params.searchTerm || '',
+          ...params
+        }
+      });
+
+      // Cache items for offline use if they don't exist yet
+      if (response.data.Items?.length > 0) {
+        const cachedItems = JSON.parse(localStorage.getItem('offlineItems') || '[]');
+        const newItems = response.data.Items.filter(item => 
+          !cachedItems.some(cached => cached.Id === item.Id)
+        );
+        if (newItems.length > 0) {
+          localStorage.setItem('offlineItems', JSON.stringify([...cachedItems, ...newItems]));
+        }
       }
 
-      if (minWidth) {
-        params.MinWidth = minWidth;
-      }
-
-      const response = await this.axios.get('/Items', { params });
       return response.data;
     } catch (error) {
       console.error('Get items error:', error);
       throw new Error('Failed to fetch media items');
     }
+  }
+
+  async getItemInfo(itemId) {
+    try {
+      const response = await this.axios.get(`/Items/${itemId}`, {
+        params: {
+          Fields: 'Overview,Genres,Studios,People,MediaStreams,MediaSources'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get item info:', error);
+      throw new Error('Failed to load item details');
+    }
+  }
+
+  async markAsFavorite(itemId, isFavorite) {
+    try {
+      const endpoint = isFavorite ? 'Favorites' : 'Favorites/Delete';
+      await this.axios.post(`/Users/Me/${endpoint}`, {
+        Id: itemId
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to update favorite status:', error);
+      throw error;
+    }
+  }
+  
+  async markAsWatched(itemId, isWatched) {
+    try {
+      const endpoint = isWatched ? 'PlayedItems' : 'PlayedItems/Delete';
+      await this.axios.post(`/Users/Me/${endpoint}`, {
+        Id: itemId
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to update watched status:', error);
+      throw error;
+    }
+  }
+
+  logout() {
+    this.accessToken = '';
+    this.currentUser = null;
+    localStorage.removeItem('accessToken');
+    this.axios.defaults.headers['X-Emby-Authorization'] = this.getAuthHeader();
   }
 
   getImageUrl(itemId, imageType = 'Primary', maxHeight = 300) {

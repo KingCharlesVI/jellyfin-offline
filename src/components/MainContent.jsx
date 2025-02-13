@@ -4,53 +4,66 @@ import Library from './views/Library';
 import Downloads from './views/Downloads';
 import Settings from './views/Settings';
 import MovieDetails from './views/MovieDetails';
+import VideoPlayer from './views/VideoPlayer';
 
 function MainContent({ currentView }) {
-    console.log('MainContent rendering, currentView:', currentView);
-    const [selectedMovieId, setSelectedMovieId] = useState(null);
-  
-    const handleMovieSelect = (movieId) => {
-      setSelectedMovieId(movieId);
-    };
-  
-    const handleBackToLibrary = () => {
-      setSelectedMovieId(null);
-    };
-  
-    const renderView = () => {
-      console.log('renderView called with:', currentView);
-      switch (currentView) {
-        case 'library':
-          return selectedMovieId ? (
-            <MovieDetails 
-              movieId={selectedMovieId} 
-              onBack={handleBackToLibrary}
-            />
-          ) : (
-            <Library onMovieSelect={handleMovieSelect} />
-          );
-        case 'downloads':
-          return <Downloads />;
-        case 'settings':
-          return <Settings />;
-        default:
-          return <Library onMovieSelect={handleMovieSelect} />;
-      }
-    };
-  
-    return (
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          mt: 8,
-          backgroundColor: 'background.default',
-        }}
-      >
-        {renderView()}
-      </Box>
-    );
+  const [selectedMovieId, setSelectedMovieId] = useState(null);
+  const [playingMovie, setPlayingMovie] = useState(null);
+
+  const handleMovieSelect = (movieId) => {
+    setSelectedMovieId(movieId);
+  };
+
+  const handleBackToLibrary = () => {
+    setSelectedMovieId(null);
+  };
+
+  const handlePlayMovie = (movie) => {
+    setPlayingMovie(movie);
+  };
+
+  const handleClosePlayer = () => {
+    setPlayingMovie(null);
+  };
+
+  const renderView = () => {
+    if (playingMovie) {
+      return <VideoPlayer movie={playingMovie} onClose={handleClosePlayer} />;
+    }
+
+    switch (currentView) {
+      case 'library':
+        return selectedMovieId ? (
+          <MovieDetails 
+            movieId={selectedMovieId} 
+            onBack={handleBackToLibrary}
+            onPlay={handlePlayMovie}
+          />
+        ) : (
+          <Library onMovieSelect={handleMovieSelect} />
+        );
+      case 'downloads':
+        return <Downloads />;
+      case 'settings':
+        return <Settings />;
+      default:
+        return <Library onMovieSelect={handleMovieSelect} />;
+    }
+  };
+
+  return (
+    <Box
+      component="main"
+      sx={{
+        position: 'relative',
+        flexGrow: 1,
+        height: '100vh',
+        overflow: 'hidden'
+      }}
+    >
+      {renderView()}
+    </Box>
+  );
 }
 
 export default MainContent;
