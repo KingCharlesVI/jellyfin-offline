@@ -328,7 +328,7 @@ class JellyfinApi {
     try {
       const response = await this.axios.get(`/Items/${itemId}`, {
         params: {
-          Fields: 'Overview,Genres,Studios,People,MediaStreams,MediaSources'
+          Fields: 'Overview,Genres,Studios,People,MediaStreams,MediaSources,UserData'
         }
       });
       return response.data;
@@ -373,6 +373,79 @@ class JellyfinApi {
 
   getImageUrl(itemId, imageType = 'Primary', maxHeight = 300) {
     return `${this.serverUrl}/Items/${itemId}/Images/${imageType}?maxHeight=${maxHeight}&quality=90`;
+  }
+
+  getStreamInfo(mediaSource) {
+    if (!mediaSource?.MediaStreams) return { badges: [] };
+  
+    const videoStream = mediaSource.MediaStreams.find(s => s.Type === 'Video');
+    if (!videoStream) return { badges: [] };
+  
+    const badges = [];
+    
+    // Resolution badge
+    if (videoStream.Width >= 3840) badges.push('4K');
+    else if (videoStream.Width >= 1920) badges.push('1080p');
+    else if (videoStream.Width >= 1280) badges.push('720p');
+  
+    // HDR detection
+    if (videoStream.VideoRangeType === 'HDR' || 
+        videoStream.ColorPrimaries === 'bt2020' || 
+        videoStream.ColorTransfer === 'smpte2084') {
+      if (videoStream.VideoDoViTitle || videoStream.DolbyVision) {
+        badges.push('Dolby Vision');
+      } else if (videoStream.Hdr10Plus) {
+        badges.push('HDR10+');
+      } else if (videoStream.Hdr10) {
+        badges.push('HDR10');
+      } else {
+        badges.push('HDR');
+      }
+    }
+  
+    return {
+      badges,
+      width: videoStream.Width,
+      height: videoStream.Height,
+      codec: videoStream.Codec,
+      bitRate: videoStream.BitRate,
+      frameRate: videoStream.RealFrameRate,
+      isHDR: videoStream.VideoRangeType === 'HDR' || 
+             videoStream.ColorPrimaries === 'bt2020' || 
+             videoStream.ColorTransfer === 'smpte2084'
+    };
+  }
+  
+  formatAudioInfo(stream) {
+    const parts = [];
+    
+    if (stream.Language) parts.push(stream.Language);
+    if (stream.Codec) {
+      let codec = stream.Codec.toUpperCase();
+      if (codec === 'DTS' && stream.Profile) {
+        codec = `DTS-${stream.Profile}`;
+      }
+      parts.push(codec);
+    }
+    if (stream.Channels) parts.push(`${stream.Channels}.1`);
+    if (stream.Profile === 'Atmos') parts.push('Atmos');
+    if (stream.BitRate) {
+      const bitrateMbps = Math.round(stream.BitRate / 1000);
+      parts.push(`@ ${bitrateMbps} Kbps`);
+    }
+  
+    return parts.join(' ');
+  }
+  
+  formatSubtitleInfo(stream) {
+    const parts = [];
+    
+    if (stream.Language) parts.push(stream.Language);
+    if (stream.Codec) parts.push(`(${stream.Codec.toUpperCase()})`);
+    if (stream.IsForced) parts.push('[Forced]');
+    if (stream.IsDefault) parts.push('[Default]');
+  
+    return parts.join(' ');
   }
 }
 

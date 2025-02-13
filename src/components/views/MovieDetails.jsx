@@ -12,7 +12,7 @@ import {
   Alert,
   IconButton
 } from '@mui/material';
-import { Play, Download, Heart, CheckCircle } from 'lucide-react';
+import { Play, Download, Heart, CheckCircle, ArrowLeft } from 'lucide-react';
 import jellyfinApi from '../../services/jellyfinApi';
 
 function MovieDetails({ movieId, onBack, onPlay }) {
@@ -21,10 +21,35 @@ function MovieDetails({ movieId, onBack, onPlay }) {
   const [error, setError] = useState(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isWatched, setIsWatched] = useState(false);
+  const [selectedVideoStream, setSelectedVideoStream] = useState('');
+  const [selectedAudioStream, setSelectedAudioStream] = useState('');
+  const [selectedSubtitleStream, setSelectedSubtitleStream] = useState('');
+  const [selectedMediaSource, setSelectedMediaSource] = useState(null);
 
   useEffect(() => {
     loadMovieDetails();
   }, [movieId]);
+
+  useEffect(() => {
+    if (movie?.MediaSources) {
+      const source = movie.MediaSources.find(s => s.Id === selectedVideoStream);
+      setSelectedMediaSource(source || movie.MediaSources[0]);
+      
+      // Auto-select highest quality audio stream
+      if (source) {
+        const bestAudioStream = getHighestQualityAudioStream(source);
+        setSelectedAudioStream(bestAudioStream);
+      }
+      
+      setSelectedSubtitleStream('');
+    }
+  }, [selectedVideoStream, movie]);
+
+  useEffect(() => {
+    if (movie?.MediaSources?.length > 0) {
+      setSelectedVideoStream(movie.MediaSources[0].Id);
+    }
+  }, [movie]);
 
   const loadMovieDetails = async () => {
     try {
@@ -66,6 +91,27 @@ function MovieDetails({ movieId, onBack, onPlay }) {
     }
   };
 
+  const getHighestQualityAudioStream = (mediaSource) => {
+    if (!mediaSource?.MediaStreams) return null;
+    
+    const audioStreams = mediaSource.MediaStreams.filter(stream => stream.Type === 'Audio');
+    
+    // Sort streams by priority: Atmos > highest channel count > highest bitrate
+    return audioStreams.sort((a, b) => {
+      // Prefer Atmos
+      if (a.Profile === 'Atmos' && b.Profile !== 'Atmos') return -1;
+      if (b.Profile === 'Atmos' && a.Profile !== 'Atmos') return 1;
+      
+      // Then by channel count
+      if (a.Channels !== b.Channels) {
+        return (b.Channels || 0) - (a.Channels || 0);
+      }
+      
+      // Then by bitrate
+      return (b.BitRate || 0) - (a.BitRate || 0);
+    })[0]?.Index || '';
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -92,6 +138,19 @@ function MovieDetails({ movieId, onBack, onPlay }) {
         overflow: 'auto'
       }}
     >
+      <Button
+        startIcon={<ArrowLeft />}
+        onClick={onBack}
+        sx={{
+          color: 'white',
+          '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.1)' },
+          position: 'absolute',
+          top: 16,
+          left: 16
+        }}
+      >
+        Back to Library
+      </Button>
       <Box sx={{ 
         position: 'relative', 
         width: '100%',
@@ -125,6 +184,27 @@ function MovieDetails({ movieId, onBack, onPlay }) {
           p: 4,
           background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.8) 100%)',
         }}>
+
+            {/* Back Button */}
+            <Button
+              startIcon={<ArrowLeft />}
+              onClick={onBack}
+              sx={{
+                color: 'white',
+                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.1)' },
+                position: 'absolute',
+                top: 16,
+                left: 16,
+                zIndex: 2,
+                backdropFilter: 'blur(10px)',
+                bgcolor: 'rgba(0, 0, 0, 0.3)',
+                borderRadius: 2,
+                px: 2,
+                py: 1
+              }}
+            >
+              Back to Library
+            </Button>
           {/* Poster and Info Section */}
           <Box sx={{ 
             display: 'flex', 
@@ -152,9 +232,24 @@ function MovieDetails({ movieId, onBack, onPlay }) {
                 </Typography>
   
                 {/* Metadata Row */}
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Chip label="4K" size="small" />
-                  <Chip label="HDR 10" size="small" />
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                  {jellyfinApi.getStreamInfo(movie.MediaSources?.[0])?.badges.map((badge, index) => (
+                    <Chip 
+                      key={index} 
+                      label={badge} 
+                      size="small"
+                      sx={{
+                        bgcolor: badge.includes('HDR') || badge.includes('Vision') ? 
+                          'rgba(255, 215, 0, 0.2)' : undefined,
+                        color: badge.includes('HDR') || badge.includes('Vision') ? 
+                          'rgb(255, 215, 0)' : undefined,
+                        '& .MuiChip-label': {
+                          fontWeight: badge.includes('HDR') || badge.includes('Vision') ? 
+                            'bold' : undefined
+                        }
+                      }}
+                    />
+                  ))}
                   <Typography color="grey.300" sx={{ mx: 1 }}>
                     {movie.ProductionYear}
                   </Typography>
@@ -242,44 +337,64 @@ function MovieDetails({ movieId, onBack, onPlay }) {
                 <Box sx={{ mt: 4, maxWidth: 400 }}>
                   <FormControl fullWidth sx={{ mb: 2 }}>
                     <Select
-                      value="default"
+                      value={selectedVideoStream || ''}
+                      onChange={(e) => setSelectedVideoStream(e.target.value)}
                       sx={{ 
                         bgcolor: 'rgba(0,0,0,0.5)',
                         color: 'white',
                         '.MuiSelect-icon': { color: 'white' }
                       }}
                     >
-                      <MenuItem value="default">
-                        Joker 2019 UHD 4K BluRay 2160p DoVi HDR10 TrueHD 7.1 Atmos H.265-MgB
-                      </MenuItem>
+                      {movie.MediaSources?.map((source) => {
+                        const videoInfo = jellyfinApi.getStreamInfo(source);
+                        return (
+                          <MenuItem key={source.Id} value={source.Id}>
+                            {videoInfo.width}x{videoInfo.height} {videoInfo.codec} 
+                            {videoInfo.bitRate ? ` @ ${Math.round(videoInfo.bitRate / 1000000)}Mbps` : ''}
+                          </MenuItem>
+                        );
+                      })}
                     </Select>
                   </FormControl>
-  
+
                   <FormControl fullWidth sx={{ mb: 2 }}>
                     <Select
-                      value="default"
+                      value={selectedAudioStream || ''}
+                      onChange={(e) => setSelectedAudioStream(e.target.value)}
                       sx={{ 
                         bgcolor: 'rgba(0,0,0,0.5)',
                         color: 'white',
                         '.MuiSelect-icon': { color: 'white' }
                       }}
                     >
-                      <MenuItem value="default">
-                        English TrueHD Atmos 7.1 @ 3819 Kbps - Original - Dolby TrueHD + Dolby Atmos
-                      </MenuItem>
+                      {selectedMediaSource?.MediaStreams
+                        ?.filter(stream => stream.Type === 'Audio')
+                        .map((stream) => (
+                          <MenuItem key={`${stream.Index}`} value={stream.Index}>
+                            {jellyfinApi.formatAudioInfo(stream)}
+                          </MenuItem>
+                        ))}
                     </Select>
                   </FormControl>
-  
+
                   <FormControl fullWidth>
                     <Select
-                      value="default"
+                      value={selectedSubtitleStream || ''}
+                      onChange={(e) => setSelectedSubtitleStream(e.target.value)}
                       sx={{ 
                         bgcolor: 'rgba(0,0,0,0.5)',
                         color: 'white',
                         '.MuiSelect-icon': { color: 'white' }
                       }}
                     >
-                      <MenuItem value="default">No Subtitle</MenuItem>
+                      <MenuItem value="">No Subtitle</MenuItem>
+                      {selectedMediaSource?.MediaStreams
+                        ?.filter(stream => stream.Type === 'Subtitle')
+                        .map((stream) => (
+                          <MenuItem key={`${stream.Index}`} value={stream.Index}>
+                            {jellyfinApi.formatSubtitleInfo(stream)}
+                          </MenuItem>
+                        ))}
                     </Select>
                   </FormControl>
                 </Box>

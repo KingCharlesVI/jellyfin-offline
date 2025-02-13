@@ -1,14 +1,67 @@
-// src/components/views/VideoPlayer.jsx
-import React from 'react';
-import { Box, IconButton, Stack } from '@mui/material';
-import { X } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { Box } from '@mui/material';
+import videojs from 'video.js';
+import 'video.js/dist/video-js.css';
+import jellyfinApi from '../../services/jellyfinApi';
 
 function VideoPlayer({ movie, onClose }) {
-  const videoUrl = `${jellyfinApi.serverUrl}/Videos/${movie.Id}/stream.mp4?static=true&mediaSourceId=${movie.MediaSources[0].Id}`;
+  const videoRef = useRef(null);
+  const playerRef = useRef(null);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+
+    // Initialize video.js
+    const videoUrl = `${jellyfinApi.serverUrl}/Videos/${movie.Id}/stream?static=true&mediaSourceId=${movie.MediaSources[0].Id}`;
+    
+    playerRef.current = videojs(videoRef.current, {
+      controls: true,
+      autoplay: true,
+      fluid: true,
+      playbackRates: [0.5, 1, 1.25, 1.5, 2],
+      sources: [{
+        src: videoUrl,
+        type: 'video/mp4'
+      }]
+    });
+
+    // Enter fullscreen on start
+    const enterFullscreen = () => {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      }
+    };
+
+    playerRef.current.ready(() => {
+      enterFullscreen();
+    });
+
+    // Handle fullscreen change
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
+    // Cleanup
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.dispose();
+      }
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, [movie, onClose]);
 
   return (
     <Box sx={{ 
-      position: 'absolute',
+      position: 'fixed',
       top: 0,
       left: 0,
       right: 0,
@@ -16,27 +69,9 @@ function VideoPlayer({ movie, onClose }) {
       bgcolor: 'black',
       zIndex: 1300
     }}>
-      <IconButton
-        onClick={onClose}
-        sx={{ 
-          position: 'absolute',
-          top: 16,
-          right: 16,
-          color: 'white',
-          zIndex: 1
-        }}
-      >
-        <X />
-      </IconButton>
       <video
-        autoPlay
-        controls
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain'
-        }}
-        src={videoUrl}
+        ref={videoRef}
+        className="video-js vjs-default-skin"
       />
     </Box>
   );

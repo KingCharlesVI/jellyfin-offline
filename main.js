@@ -10,7 +10,7 @@ const progressStore = new Store({ name: 'progress' });
 let mainWindow;
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
