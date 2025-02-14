@@ -1,13 +1,14 @@
 {
   "name": "jellyfin-offline",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Offline media viewer for Jellyfin",
   "main": "main.js",
   "scripts": {
     "start": "webpack && electron .",
     "build": "webpack --mode production",
     "watch": "webpack --watch",
-    "dev": "concurrently \"npm run watch\" \"electron .\""
+    "dev": "concurrently \"npm run watch\" \"electron .\"",
+    "publish": "electron-forge publish"
   },
   "dependencies": {
     "@babel/runtime": "^7.26.7",
@@ -16,6 +17,7 @@
     "@mui/material": "^5.16.14",
     "@videojs/themes": "^1.0.1",
     "axios": "^1.7.9",
+    "electron-forge": "^5.2.4",
     "electron-store": "^8.1.0",
     "lucide-react": "^0.475.0",
     "react": "^18.2.0",
@@ -27,6 +29,8 @@
     "@babel/plugin-transform-runtime": "^7.26.8",
     "@babel/preset-env": "^7.26.8",
     "@babel/preset-react": "^7.26.3",
+    "@electron-forge/cli": "^7.6.1",
+    "@electron-forge/publisher-github": "^7.6.1",
     "babel-loader": "^9.2.1",
     "css-loader": "^7.1.2",
     "electron": "^23.1.3",
