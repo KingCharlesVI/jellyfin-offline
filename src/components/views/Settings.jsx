@@ -28,41 +28,52 @@ function Settings() {
   const [clearDownloadsDialog, setClearDownloadsDialog] = useState(false);
   const [appVersion, setAppVersion] = useState('');
   const [downloadStats, setDownloadStats] = useState({ size: '0 GB', count: 0 });
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
-      // Load app version
-      const version = await ipcRenderer.invoke('get-app-version');
-      setAppVersion(version);
-
-      // Load server and user info
-      const savedServer = localStorage.getItem('serverUrl');
-      const savedToken = localStorage.getItem('accessToken');
-      const savedPath = localStorage.getItem('downloadPath');
-      
-      if (savedPath) {
-        setDownloadPath(savedPath);
-      }
-      
-      if (savedServer) {
-        jellyfinApi.setServerUrl(savedServer);
-        
-        try {
-          const info = await jellyfinApi.getPublicSystemInfo();
-          setServerInfo(info);
-        } catch (error) {
-          console.error('Failed to get server info:', error);
+      try {
+        // Load app version
+        const version = await ipcRenderer.invoke('get-app-version');
+        setAppVersion(version);
+  
+        // Load download path
+        const savedPath = localStorage.getItem('downloadPath');
+        if (savedPath) {
+          setDownloadPath(savedPath);
         }
+  
+        // Load server and user info
+        const savedServer = localStorage.getItem('serverUrl');
+        const savedToken = localStorage.getItem('accessToken');
         
-        if (savedToken) {
-          jellyfinApi.setAccessToken(savedToken);
-          checkCurrentUser();
+        if (savedServer) {
+          try {
+            jellyfinApi.setServerUrl(savedServer);
+            const connectionResult = await jellyfinApi.testConnection(savedServer);
+            
+            if (connectionResult.offline) {
+              setConnected(false);
+              setError('Server is offline, using cached data');
+            } else {
+              setServerInfo(connectionResult.serverInfo);
+              setConnected(true);
+  
+              if (savedToken) {
+                jellyfinApi.setAccessToken(savedToken);
+                await checkCurrentUser();
+              }
+            }
+          } catch (error) {
+            console.error('Failed to connect to server:', error);
+            setError('Failed to connect to server');
+            setConnected(false);
+          }
         }
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+        setError('Failed to load settings');
       }
-
-      // Load download stats
-      const stats = await ipcRenderer.invoke('get-downloads-size');
-      setDownloadStats(stats);
     };
     
     loadSettings();
@@ -124,6 +135,23 @@ function Settings() {
     jellyfinApi.setAccessToken('');
   };
 
+  const handleDisconnect = () => {
+    // Clear all local storage
+    localStorage.removeItem('serverUrl');
+    localStorage.removeItem('accessToken');
+    
+    // Reset jellyfin API state
+    jellyfinApi.setServerUrl('');
+    jellyfinApi.setAccessToken('');
+    
+    // Reset component state
+    setServerInfo(null);
+    setCurrentUser(null);
+    
+    // Trigger re-auth
+    window.location.reload(); // This will take us back to onboarding due to App.jsx auth check
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>
@@ -151,12 +179,21 @@ function Settings() {
               </Typography>
             </Box>
 
-            <Button
-              variant="outlined"
-              onClick={() => setChangeServer(true)}
-            >
-              Change Server
-            </Button>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="outlined"
+                onClick={() => setChangeServer(true)}
+              >
+                Change Server
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={handleDisconnect}
+              >
+                Disconnect
+              </Button>
+            </Stack>
           </Stack>
         </Paper>
 

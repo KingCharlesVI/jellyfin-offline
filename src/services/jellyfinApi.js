@@ -126,9 +126,13 @@ class JellyfinApi {
         },
         timeout: 5000
       });
+  
+      // Store these for future use
+      this.serverInfo = response.data;
       return {
         success: true,
-        serverInfo: response.data
+        serverInfo: response.data,
+        offline: false
       };
     } catch (error) {
       console.error('Connection test failed:', error);
@@ -139,12 +143,18 @@ class JellyfinApi {
         return {
           success: true,
           offline: true,
-          lastSync: this.lastSyncTime
+          lastSync: this.lastSyncTime,
+          serverInfo: null
         };
       }
       
       throw new Error('Unable to connect to server');
     }
+  }
+  
+  // Add this getter method
+  getServerInfo() {
+    return this.serverInfo;
   }
 
   async getPublicUsers() {

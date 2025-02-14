@@ -64,9 +64,23 @@ function App() {
       {!isAuthenticated ? (
         <Onboarding onAuthenticated={() => setIsAuthenticated(true)} />
       ) : (
-        <Box sx={{ display: 'flex', height: '100vh' }}>
+        <Box sx={{ 
+          display: 'flex',
+          minHeight: '100vh',
+          maxHeight: '100vh',
+          overflow: 'hidden'
+        }}>
           <Sidebar selectedView={selectedView} onViewChange={setSelectedView} />
-          <MainContent currentView={selectedView} />
+          <Box 
+            component="main" 
+            sx={{ 
+              flexGrow: 1,
+              overflow: 'hidden',
+              display: 'flex'
+            }}
+          >
+            <MainContent currentView={selectedView} />
+          </Box>
         </Box>
       )}
     </ThemeProvider>

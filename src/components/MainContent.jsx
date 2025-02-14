@@ -53,12 +53,11 @@ function MainContent({ currentView }) {
 
   return (
     <Box
-      component="main"
       sx={{
-        position: 'relative',
         flexGrow: 1,
-        height: '100vh',
-        overflow: 'hidden'
+        overflow: 'auto',
+        width: '100%',
+        paddingBottom: 3 // Add some bottom padding for scrolling
       }}
     >
       {renderView()}
