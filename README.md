@@ -123,12 +123,12 @@ A guide on how to run the software. *This is meant for developers/contributors*,
 3. Start the app
    ```sh
     npm run start
-   ```
-**OR**
-3. Start the app in development mode
+    ```
+    OR
+    
     ```sh
     npm run dev
-    ```
+   ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
