@@ -203,7 +203,7 @@ function Settings() {
             <User size={24} />
             <Typography variant="h6">User Account</Typography>
           </Stack>
-          
+
           {currentUser ? (
             <Stack spacing={2}>
               <Box>
@@ -215,7 +215,7 @@ function Settings() {
 
               <Button
                 variant="outlined"
-                startIcon={<LogOut />}
+                startIcon={<LogOut size={18} />}
                 onClick={handleLogout}
                 color="error"
               >
@@ -223,9 +223,35 @@ function Settings() {
               </Button>
             </Stack>
           ) : (
-            <Typography color="text.secondary">
-              Not logged in
-            </Typography>
+            <Stack spacing={2}>
+              <Typography color="text.secondary">Not logged in</Typography>
+
+              {/* Display the login form */}
+              <TextField
+                label="Username"
+                variant="outlined"
+                fullWidth
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+              <TextField
+                label="Password"
+                type="password"
+                variant="outlined"
+                fullWidth
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              {error && <Typography color="error">{error}</Typography>}
+              <Button
+                variant="contained"
+                startIcon={<LogIn size={18} />}
+                onClick={handleLogin}
+                color="primary"
+              >
+                Log In
+              </Button>
+            </Stack>
           )}
         </Paper>
 

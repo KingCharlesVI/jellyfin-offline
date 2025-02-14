@@ -54,10 +54,12 @@ function MainContent({ currentView }) {
   return (
     <Box
       sx={{
-        flexGrow: 1,
-        overflow: 'auto',
-        width: '100%',
-        paddingBottom: 3 // Add some bottom padding for scrolling
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflow: 'auto'
       }}
     >
       {renderView()}

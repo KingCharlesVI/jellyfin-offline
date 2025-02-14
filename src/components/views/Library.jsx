@@ -182,6 +182,8 @@ function MediaCard({ item, onSelect }) {
 }
 
 function Library({ onMovieSelect }) {
+
+  console.log('Library component is rendering');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({

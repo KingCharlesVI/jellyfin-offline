@@ -66,8 +66,7 @@ function App() {
       ) : (
         <Box sx={{ 
           display: 'flex',
-          minHeight: '100vh',
-          maxHeight: '100vh',
+          height: '100vh',
           overflow: 'hidden'
         }}>
           <Sidebar selectedView={selectedView} onViewChange={setSelectedView} />
@@ -75,8 +74,8 @@ function App() {
             component="main" 
             sx={{ 
               flexGrow: 1,
-              overflow: 'hidden',
-              display: 'flex'
+              position: 'relative',
+              overflow: 'hidden'
             }}
           >
             <MainContent currentView={selectedView} />
