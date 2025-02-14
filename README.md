@@ -39,9 +39,9 @@
     Windows Jellyfin client for travelling
     <br />
     <br />
-    <a href="https://github.com/KingCharlesVI/jellyfin-offline/issues/new?labels=bug&template=bug_report_.md">Report Bug</a>
+    <a href="https://github.com/KingCharlesVI/jellyfin-offline/issues/new?labels=bug&template=bug_report.md">Report Bug</a>
     &middot;
-    <a href="https://github.com/KingCharlesVI/jellyfin-offline/issues/new?labels=enhancement&template=feature_request_.md">Request Feature</a>
+    <a href="https://github.com/KingCharlesVI/jellyfin-offline/issues/new?labels=enhancement&template=feature_request.md">Request Feature</a>
   </p>
 </div>
 
