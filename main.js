@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const Store = require('electron-store');
 const path = require('path');
 const fs = require('fs');
@@ -8,16 +8,20 @@ const mediaStore = new Store({ name: 'downloaded-media' });
 const progressStore = new Store({ name: 'progress' });
 
 let mainWindow;
+let menu = null;  // Store menu reference
 
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false
+      contextIsolation: false,
     }
   });
+
+  // Store the default menu
+  menu = Menu.getApplicationMenu();
 
   mainWindow.loadFile(path.join(__dirname, 'public', 'index.html'));
 }
@@ -101,4 +105,37 @@ ipcMain.handle('sync-progress', async (event, { serverUrl, apiKey }) => {
     console.error('Sync failed:', error);
     return { success: false, error: error.message };
   }
+});
+
+ipcMain.handle('hide-menu', () => {
+  Menu.setApplicationMenu(null);
+  mainWindow.setFullScreen(true);
+});
+
+ipcMain.handle('show-menu', () => {
+  Menu.setApplicationMenu(menu);
+  mainWindow.setFullScreen(false);
+});
+
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
+ipcMain.handle('select-directory', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory']
+  });
+  return result.filePaths[0];
+});
+
+ipcMain.handle('get-downloads-size', async () => {
+  const mediaDir = path.join(app.getPath('userData'), 'media');
+  // Implementation for getting total size of downloads
+  return { size: '0 GB', count: 0 };
+});
+
+ipcMain.handle('clear-downloads', async () => {
+  const mediaDir = path.join(app.getPath('userData'), 'media');
+  // Implementation for clearing downloads
+  return true;
 });

@@ -37,7 +37,22 @@ const FILTER_OPTIONS = [
 
 function MediaCard({ item, onSelect }) {
   const [isHovered, setIsHovered] = useState(false);
+  const [progress, setProgress] = useState(null);
   const imageUrl = jellyfinApi.getImageUrl(item.Id);
+  const { ipcRenderer } = require('electron');
+
+  // Load progress when card mounts
+  useEffect(() => {
+    const loadProgress = async () => {
+      try {
+        const savedProgress = await ipcRenderer.invoke('get-progress', { mediaId: item.Id });
+        setProgress(savedProgress);
+      } catch (error) {
+        console.error('Failed to load progress:', error);
+      }
+    };
+    loadProgress();
+  }, [item.Id]);
   
   return (
     <Card 
@@ -56,6 +71,7 @@ function MediaCard({ item, onSelect }) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      {/* Existing image */}
       <Box
         component="img"
         src={imageUrl}
@@ -71,6 +87,30 @@ function MediaCard({ item, onSelect }) {
           transition: 'filter 0.2s'
         }}
       />
+
+      {/* Progress bar - always visible */}
+      {progress && progress.position > 0 && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 3,
+            bgcolor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 1
+          }}
+        >
+          <Box
+            sx={{
+              height: '100%',
+              width: `${(progress.position / progress.duration) * 100}%`,
+              bgcolor: '#00a4dc', // Jellyfin blue
+              transition: 'width 0.3s'
+            }}
+          />
+        </Box>
+      )}
       
       {isHovered && (
         <Box
@@ -118,6 +158,23 @@ function MediaCard({ item, onSelect }) {
               </Typography>
             </Box>
           )}
+        </Box>
+      )}
+
+      {/* Watched indicator for completed items */}
+      {progress && progress.position >= progress.duration * 0.9 && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            bgcolor: 'rgba(0, 0, 0, 0.7)',
+            borderRadius: '50%',
+            p: 0.5,
+            zIndex: 1
+          }}
+        >
+          <CheckCircle size={20} color="#00ff00" />
         </Box>
       )}
     </Card>
