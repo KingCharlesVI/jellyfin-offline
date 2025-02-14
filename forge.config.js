@@ -41,4 +41,18 @@ module.exports = {
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
   ],
+  publishers: [
+    {
+      name: '@electron-forge/publisher-github',
+      config: {
+        repository: {
+          owner: 'KingCharlesVI',
+          name: 'jellyfin-offline'
+        },
+        prerelease: false,
+        draft: false,
+        authToken: process.env.GITHUB_TOKEN
+      }
+    }
+  ]
 };

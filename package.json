@@ -9,7 +9,7 @@
     "build": "webpack --mode production",
     "watch": "webpack --watch",
     "dev": "concurrently \"npm run watch\" \"electron .\"",
-    "publish": "electron-forge publish",
+    "publish": "env-cmd electron-forge publish",
     "package": "electron-forge package",
     "make": "electron-forge make"
   },
