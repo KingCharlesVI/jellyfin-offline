@@ -4,13 +4,31 @@ const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: '/favicon'
+    icon: './assets/logo',
+    executableName: 'Jelly-To-Go'
   },
   rebuildConfig: {},
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
-      config: {},
+      config: {
+        name: 'jellyfin_offline',
+        authors: 'KingCharlesVI',
+        description: 'Jelly To Go Client',
+        setupIcon: './assets/icon.ico',
+        iconUrl: 'https://raw.githubusercontent.com/KingCharlesVI/jellyfin-offline/master/assets/icon.ico',
+        setupExe: 'JellyToGo-Setup.exe',
+        shortcuts: [
+          {
+            name: 'Jellyfin Offline',
+            description: 'Launch Jelly-To-Go',
+            target: '[APPLICATIONROOTDIRECTORY]\\Jelly-To-Go.exe',
+            arguments: '',
+            iconPath: '[APPLICATIONROOTDIRECTORY]\\resources\\app\\assets\\icon.ico',
+            advertise: true
+          }
+        ]
+      },
     },
     {
       name: '@electron-forge/maker-zip',

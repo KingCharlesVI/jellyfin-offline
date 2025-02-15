@@ -3,7 +3,7 @@ import { Box } from '@mui/material';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import jellyfinApi from '../../services/jellyfinApi';
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = window.require('electron');
 
 function VideoPlayer({ movie, onClose }) {
   const videoRef = useRef(null);
@@ -13,16 +13,23 @@ function VideoPlayer({ movie, onClose }) {
   useEffect(() => {
     if (!videoRef.current) return;
 
-    // Initialize video.js
-    const videoUrl = `${jellyfinApi.serverUrl}/Videos/${movie.Id}/stream?static=true&mediaSourceId=${movie.MediaSources[0].Id}`;
+    // Determine video source based on whether it's a local file or streaming
+    const videoSource = movie.isLocal
+      ? `file://${movie.localPath}`
+      : `${jellyfinApi.serverUrl}/Videos/${movie.Id}/stream?static=true&mediaSourceId=${movie.MediaSources[0].Id}`;
     
+    // Log the video source type and path
+    console.log('Video Source Type:', movie.isLocal ? 'Local File' : 'Jellyfin Stream');
+    console.log('Video Path:', videoSource);
+
+    // Initialize video.js
     playerRef.current = videojs(videoRef.current, {
       controls: true,
       autoplay: true,
       fluid: true,
       playbackRates: [0.5, 1, 1.25, 1.5, 2],
       sources: [{
-        src: videoUrl,
+        src: videoSource,
         type: 'video/mp4'
       }]
     });
@@ -30,9 +37,16 @@ function VideoPlayer({ movie, onClose }) {
     // Load saved progress
     const loadProgress = async () => {
       try {
+        // Always fetch the latest progress from storage
         const progress = await ipcRenderer.invoke('get-progress', { mediaId: movie.Id });
+        
+        console.log('Loaded progress:', progress);
+        
         if (progress && progress.position) {
-          playerRef.current.currentTime(progress.position);
+          // For resuming, start a few seconds before the saved position
+          const resumePosition = Math.max(0, progress.position - 3);
+          console.log('Resuming at position:', resumePosition);
+          playerRef.current.currentTime(resumePosition);
         }
       } catch (error) {
         console.error('Failed to load progress:', error);
@@ -50,10 +64,18 @@ function VideoPlayer({ movie, onClose }) {
       if (currentTime < 1 || currentTime >= duration - 1) return;
 
       try {
+        console.log('Saving progress:', {
+          mediaId: movie.Id,
+          position: currentTime,
+          duration: duration,
+          lastUpdated: new Date().toISOString()
+        });
+
         await ipcRenderer.invoke('update-progress', {
           mediaId: movie.Id,
           position: currentTime,
-          duration: duration
+          duration: duration,
+          lastUpdated: new Date().toISOString() // Add timestamp for tracking
         });
       } catch (error) {
         console.error('Failed to save progress:', error);
@@ -69,7 +91,7 @@ function VideoPlayer({ movie, onClose }) {
     });
 
     // Start progress saving interval
-    progressInterval.current = setInterval(saveProgress, 5000); // Save every 5 seconds
+    progressInterval.current = setInterval(saveProgress, 5000);
 
     // Handle player events
     const handleTimeUpdate = () => {

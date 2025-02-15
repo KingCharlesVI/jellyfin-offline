@@ -1,6 +1,6 @@
 {
   "name": "jellyfin-offline",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "author": "KingCharlesVI",
   "description": "Offline media viewer for Jellyfin",
   "main": "main.js",
