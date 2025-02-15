@@ -2,8 +2,8 @@ const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 const path = require('path');
 
-const ICON_PATH = path.resolve(__dirname, 'assets', 'icon');
-const ICON_ICO_PATH = path.resolve(__dirname, 'assets', 'icon.ico');
+const ICON_PATH = path.resolve(__dirname, 'assets', 'logo');
+const ICON_ICO_PATH = path.resolve(__dirname, 'assets', 'logo.ico');
 
 module.exports = {
   packagerConfig: {
@@ -28,7 +28,7 @@ module.exports = {
             description: 'Launch Jelly-To-Go',
             target: '[APPLICATIONROOTDIRECTORY]\\Jelly-To-Go.exe',
             arguments: '',
-            iconPath: '[APPLICATIONROOTDIRECTORY]\\resources\\app\\assets\\icon.ico',
+            iconPath: '[APPLICATIONROOTDIRECTORY]\\resources\\app\\assets\\logo.ico',
             advertise: true
           }
         ]
