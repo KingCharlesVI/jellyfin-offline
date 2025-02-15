@@ -15,7 +15,16 @@ import {
 import { Play, Download, Heart, CheckCircle, ArrowLeft } from 'lucide-react';
 import jellyfinApi from '../../services/jellyfinApi';
 
+const { ipcRenderer } = window.require('electron');
+
+console.log('Testing IPC availability:', !!ipcRenderer);
+if (ipcRenderer) {
+  ipcRenderer.send('test-ipc', 'test message');
+}
+
 function MovieDetails({ movieId, onBack, onPlay }) {
+  console.log('MovieDetails rendering', { movieId });
+  
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -25,9 +34,43 @@ function MovieDetails({ movieId, onBack, onPlay }) {
   const [selectedAudioStream, setSelectedAudioStream] = useState('');
   const [selectedSubtitleStream, setSelectedSubtitleStream] = useState('');
   const [selectedMediaSource, setSelectedMediaSource] = useState(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   useEffect(() => {
     loadMovieDetails();
+
+    // Set up listeners
+    ipcRenderer.on('download-progress', (_, progress) => {
+      console.log('Download progress:', progress);
+      setDownloadProgress(progress.percent);
+    });
+
+    ipcRenderer.on('download-complete', () => {
+      console.log('Download complete');
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    });
+
+    ipcRenderer.on('download-error', (_, error) => {
+      console.error('Download error:', error);
+      setError('Download failed: ' + error);
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    });
+
+    ipcRenderer.on('test-reply', (_, message) => {
+      console.log('Received reply:', message);
+      alert('Received reply: ' + message);
+    });
+
+    // Cleanup
+    return () => {
+      ipcRenderer.removeAllListeners('download-progress');
+      ipcRenderer.removeAllListeners('download-complete');
+      ipcRenderer.removeAllListeners('download-error');
+      ipcRenderer.removeAllListeners('test-reply');
+    };
   }, [movieId]);
 
   useEffect(() => {
@@ -35,7 +78,6 @@ function MovieDetails({ movieId, onBack, onPlay }) {
       const source = movie.MediaSources.find(s => s.Id === selectedVideoStream);
       setSelectedMediaSource(source || movie.MediaSources[0]);
       
-      // Auto-select highest quality audio stream
       if (source) {
         const bestAudioStream = getHighestQualityAudioStream(source);
         setSelectedAudioStream(bestAudioStream);
@@ -96,20 +138,46 @@ function MovieDetails({ movieId, onBack, onPlay }) {
     
     const audioStreams = mediaSource.MediaStreams.filter(stream => stream.Type === 'Audio');
     
-    // Sort streams by priority: Atmos > highest channel count > highest bitrate
     return audioStreams.sort((a, b) => {
-      // Prefer Atmos
       if (a.Profile === 'Atmos' && b.Profile !== 'Atmos') return -1;
       if (b.Profile === 'Atmos' && a.Profile !== 'Atmos') return 1;
       
-      // Then by channel count
       if (a.Channels !== b.Channels) {
         return (b.Channels || 0) - (a.Channels || 0);
       }
       
-      // Then by bitrate
       return (b.BitRate || 0) - (a.BitRate || 0);
     })[0]?.Index || '';
+  };
+
+  const handleDownload = async () => {
+    try {
+      console.log('Starting download...');
+      setIsDownloading(true);
+      setError(null);
+      
+      const downloadUrl = await jellyfinApi.getDownloadUrl(
+        movieId,
+        selectedMediaSource.Id,
+        selectedAudioStream,
+        selectedSubtitleStream
+      );
+      
+      console.log('Download URL:', downloadUrl);
+      const headers = await jellyfinApi.getAuthHeaders();
+      console.log('Headers:', headers);
+
+      ipcRenderer.send('download-media', {
+        url: downloadUrl,
+        filename: `${movie.Name} (${movie.ProductionYear}).mp4`,
+        headers: headers
+      });
+
+    } catch (error) {
+      console.error('Failed to start download:', error);
+      setError('Failed to start download: ' + error.message);
+      setIsDownloading(false);
+    }
   };
 
   if (loading) {
@@ -274,8 +342,24 @@ function MovieDetails({ movieId, onBack, onPlay }) {
                   size="large"
                   startIcon={<Download />}
                   sx={{ px: 4 }}
+                  disabled={isDownloading}
+                  onClick={handleDownload}
                 >
-                  DOWNLOAD
+                  {isDownloading 
+                    ? `DOWNLOADING ${downloadProgress.toFixed(1)}%` 
+                    : 'DOWNLOAD'}
+                </Button>
+                <Button
+                  variant="contained"
+                  size="large"
+                  sx={{ px: 4 }}
+                  onClick={() => {
+                    console.log('Test button clicked');
+                    alert('Button clicked');
+                    ipcRenderer.send('test-message', 'Hello from renderer');
+                  }}
+                >
+                  TEST IPC
                 </Button>
                 <IconButton 
                   onClick={handleFavoriteClick}
