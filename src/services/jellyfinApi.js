@@ -1,3 +1,4 @@
+const { Client } = require('node-ssdp');
 import axios from 'axios';
 
 class JellyfinApi {
@@ -72,49 +73,60 @@ class JellyfinApi {
   }
 
   async discoverServers() {
-    try {
-      // Try multiple discovery methods
-      const servers = [];
+    const servers = [];
 
-      // Method 1: SSDP discovery
-      try {
-        const response = await axios.get('https://localhost:7359/jellyfin/discovery');
-        if (response.data) {
-          servers.push(...response.data);
-        }
-      } catch (e) {
-        console.log('SSDP discovery failed:', e);
-      }
+    // SSDP Discovery
+    async function ssdpDiscovery() {
+        return new Promise((resolve) => {
+            const client = new Client();
+            const discovered = [];
 
-      // Method 2: Common local addresses
-      const localPorts = ['8096', '8920'];
-      const localAddresses = ['localhost', '127.0.0.1'];
-      
-      for (const address of localAddresses) {
-        for (const port of localPorts) {
-          try {
-            const url = `http://${address}:${port}`;
-            const response = await axios.get(`${url}/System/Info/Public`, {
-              headers: { 'X-Emby-Authorization': this.getAuthHeader() },
-              timeout: 1000
+            client.on('response', (headers, statusCode, rinfo) => {
+                if (headers.LOCATION && headers.SERVER && headers.SERVER.includes('Jellyfin')) {
+                    discovered.push({ url: headers.LOCATION, address: rinfo.address });
+                    console.log(`Found Jellyfin server: ${headers.LOCATION} at ${rinfo.address}`);
+                }
             });
-            if (response.data) {
-              servers.push({
-                url,
-                info: response.data
-              });
-            }
-          } catch (e) {
-            // Skip failed attempts
-          }
-        }
-      }
 
-      return servers;
-    } catch (error) {
-      console.error('Server discovery failed:', error);
-      return [];
+            // Search for Jellyfin servers via SSDP
+            client.search('urn:schemas-upnp-org:device:MediaServer:1');
+
+            // Stop SSDP search after 5 seconds
+            setTimeout(() => {
+                client.stop();
+                resolve(discovered);
+            }, 5000);
+        });
     }
+
+    try {
+        const ssdpServers = await ssdpDiscovery();
+        servers.push(...ssdpServers);
+    } catch (e) {
+        console.error('SSDP discovery failed:', e);
+    }
+
+    // Common Local Addresses
+    const localPorts = ['8096', '8920'];
+    const localAddresses = ['localhost', '127.0.0.1'];
+
+    for (const address of localAddresses) {
+        for (const port of localPorts) {
+            try {
+                const url = `http://${address}:${port}`;
+                const response = await axios.get(`${url}/System/Info/Public`, { timeout: 1000 });
+
+                if (response.data) {
+                    servers.push({ url, info: response.data });
+                    console.log(`Found local Jellyfin server: ${url}`);
+                }
+            } catch (e) {
+                // Skip failed attempts
+            }
+        }
+    }
+
+    return servers;
   }
 
   async testConnection(url) {

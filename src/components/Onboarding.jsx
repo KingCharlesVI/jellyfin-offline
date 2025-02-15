@@ -46,7 +46,8 @@ function Onboarding({ onAuthenticated }) {
     setDiscovering(true);
     setError('');
     try {
-      const servers = await jellyfinApi.discoverServers();
+      // Assuming jellyfinApi.newDiscoverServers() is the new discovery method
+      const servers = await jellyfinApi.discoverServers(); 
       setDiscoveredServers(servers);
       if (servers.length === 0) {
         setError('No servers found on your network');
