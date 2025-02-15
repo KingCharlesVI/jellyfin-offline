@@ -1,8 +1,11 @@
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
 const Store = require('electron-store');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const https = require('https');
+const url = require('url');
+const settingsStore = new Store({ name: 'settings' });
 
 // Initialize stores for different types of data
 const mediaStore = new Store({ name: 'downloaded-media' });
@@ -46,28 +49,38 @@ ipcMain.on('test-message', (event, arg) => {
 });
 
 // Handle media download
-ipcMain.on('download-media', async (event, { url, filename, headers }) => {
-  console.log('Received download request:', { url, filename });
-  console.log('Headers:', headers);
-  
+ipcMain.on('download-media', async (event, { url: downloadUrl, filename, headers, movieId }) => {
   try {
-    const mediaDir = path.join(app.getPath('userData'), 'media');
-    console.log('Saving to directory:', mediaDir);
-    
-    const filePath = path.join(mediaDir, filename);
+    // Get download path from settings store
+    const targetDir = settingsStore.get('downloadPath') || path.join(app.getPath('userData'), 'media');
+    console.log('Using download path:', targetDir);
+
+    // Ensure the target directory exists
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const filePath = path.join(targetDir, filename);
     console.log('Full file path:', filePath);
-    
+
     const file = fs.createWriteStream(filePath);
 
-    console.log('Making HTTPS request...');
-    const request = https.get(url, { headers }, response => {
+    // Parse the URL to determine which protocol to use
+    const parsedUrl = new URL(downloadUrl);
+    const client = parsedUrl.protocol === 'https:' ? https : http;
+
+    console.log('Using protocol:', parsedUrl.protocol);
+    console.log('Headers:', headers);
+
+    const request = client.get(downloadUrl, { headers }, response => {
       console.log('Response status:', response.statusCode);
       console.log('Response headers:', response.headers);
 
       if (response.statusCode !== 200) {
         fs.unlink(filePath, () => {
-          console.error(`Server returned status code: ${response.statusCode}`);
-          event.reply('download-error', `Server returned status code: ${response.statusCode}`);
+          const error = `Server returned status code: ${response.statusCode}`;
+          console.error(error);
+          event.reply('download-error', error);
         });
         return;
       }
@@ -92,10 +105,10 @@ ipcMain.on('download-media', async (event, { url, filename, headers }) => {
       file.on('finish', () => {
         console.log('Download finished');
         file.close();
-        const mediaId = path.basename(filePath, path.extname(filePath));
         
-        mediaStore.set(mediaId, {
-          id: mediaId,
+        // Store using the actual movieId
+        mediaStore.set(movieId, {
+          id: movieId,
           title: filename,
           path: filePath,
           downloadedAt: Date.now(),
@@ -103,7 +116,7 @@ ipcMain.on('download-media', async (event, { url, filename, headers }) => {
         });
         
         event.reply('download-complete', {
-          id: mediaId,
+          id: movieId,
           path: filePath
         });
       });
@@ -122,9 +135,85 @@ ipcMain.on('download-media', async (event, { url, filename, headers }) => {
   }
 });
 
+ipcMain.handle('set-download-path', (event, path) => {
+  settingsStore.set('downloadPath', path);
+  return true;
+});
+
+ipcMain.handle('get-download-path', () => {
+  return settingsStore.get('downloadPath') || path.join(app.getPath('userData'), 'media');
+});
+
 // Get all downloaded media
 ipcMain.handle('get-downloaded-media', () => {
   return Object.values(mediaStore.store);
+});
+
+ipcMain.handle('select-directory', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: 'Select Download Location',
+    buttonLabel: 'Select Folder'
+  });
+
+  if (!result.canceled) {
+    return result.filePaths[0];
+  }
+  return null;
+});
+
+ipcMain.handle('check-if-downloaded', async (event, movieId) => {
+  try {
+    console.log('Checking if movie is downloaded:', movieId);
+    const downloadData = mediaStore.get(movieId);
+    console.log('Download data:', downloadData);
+    
+    if (!downloadData) {
+      return false;
+    }
+
+    // Also check if the file actually exists
+    if (!fs.existsSync(downloadData.path)) {
+      console.log('File not found at path:', downloadData.path);
+      mediaStore.delete(movieId);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error checking download status:', error);
+    return false;
+  }
+});
+
+ipcMain.handle('delete-download', async (event, mediaId) => {
+  try {
+    console.log('Attempting to delete download:', mediaId);
+    const downloadData = mediaStore.get(mediaId);
+    
+    if (!downloadData) {
+      console.log('No download data found for:', mediaId);
+      return false;
+    }
+
+    console.log('Found download data:', downloadData);
+
+    if (downloadData.path && fs.existsSync(downloadData.path)) {
+      // Delete the file
+      await fs.promises.unlink(downloadData.path);
+      console.log('Deleted file:', downloadData.path);
+    }
+
+    // Remove from stores
+    mediaStore.delete(mediaId);
+    progressStore.delete(mediaId);
+    
+    console.log('Removed from stores');
+    return true;
+  } catch (error) {
+    console.error('Failed to delete download:', error);
+    throw error;
+  }
 });
 
 // Handle progress updates

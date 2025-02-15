@@ -386,6 +386,41 @@ class JellyfinApi {
     }
   }
 
+  async getDownloadUrl(itemId, mediaSourceId, audioStreamIndex, subtitleStreamIndex) {
+    console.log('Getting download URL for:', {
+      itemId,
+      mediaSourceId,
+      audioStreamIndex,
+      subtitleStreamIndex
+    });
+
+    const params = new URLSearchParams({
+      static: true,
+      mediaSourceId: mediaSourceId,
+      deviceId: this.deviceId,
+      api_key: this.apiKey
+    });
+
+    if (audioStreamIndex) {
+      params.append('AudioStreamIndex', audioStreamIndex);
+    }
+
+    if (subtitleStreamIndex) {
+      params.append('SubtitleStreamIndex', subtitleStreamIndex);
+    }
+
+    // Make sure we maintain the protocol (http/https) from the server URL
+    const url = `${this.serverUrl}/Videos/${itemId}/stream.mp4?${params.toString()}`;
+    console.log('Generated download URL:', url);
+    return url;
+  }
+
+  async getAuthHeaders() {
+    return {
+      'X-Emby-Authorization': `MediaBrowser Client="Electron", Device="${this.deviceName}", DeviceId="${this.deviceId}", Version="1.0.0", Token="${this.apiKey}"`,
+    };
+  }
+
   logout() {
     this.accessToken = '';
     this.currentUser = null;

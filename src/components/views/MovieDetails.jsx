@@ -36,42 +36,68 @@ function MovieDetails({ movieId, onBack, onPlay }) {
   const [selectedMediaSource, setSelectedMediaSource] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadPath, setDownloadPath] = useState('');
+  const [isDownloaded, setIsDownloaded] = useState(false);
 
   useEffect(() => {
     loadMovieDetails();
-
+  
     // Set up listeners
     ipcRenderer.on('download-progress', (_, progress) => {
       console.log('Download progress:', progress);
       setDownloadProgress(progress.percent);
     });
-
+  
     ipcRenderer.on('download-complete', () => {
       console.log('Download complete');
       setIsDownloading(false);
       setDownloadProgress(0);
+      setIsDownloaded(true);  // Add this line
     });
-
+  
     ipcRenderer.on('download-error', (_, error) => {
       console.error('Download error:', error);
       setError('Download failed: ' + error);
       setIsDownloading(false);
       setDownloadProgress(0);
     });
+  
+    // Check if movie is already downloaded
+    if (movie?.Id) {
+      ipcRenderer.invoke('check-if-downloaded', movie.Id).then(downloaded => {
+        setIsDownloaded(downloaded);
+      });
+    }
 
-    ipcRenderer.on('test-reply', (_, message) => {
-      console.log('Received reply:', message);
-      alert('Received reply: ' + message);
-    });
+    const loadMovieData = async () => {
+      try {
+        setLoading(true);
+        const result = await jellyfinApi.getItemInfo(movieId);
+        setMovie(result);
+        setIsFavorite(result.UserData?.IsFavorite || false);
+        setIsWatched(result.UserData?.Played || false);
+  
+        // Check if movie is already downloaded
+        const isDownloaded = await ipcRenderer.invoke('check-if-downloaded', result.Id);
+        setIsDownloaded(isDownloaded);
+  
+      } catch (error) {
+        console.error('Failed to load movie:', error);
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    loadMovieData();
+  
     // Cleanup
     return () => {
       ipcRenderer.removeAllListeners('download-progress');
       ipcRenderer.removeAllListeners('download-complete');
       ipcRenderer.removeAllListeners('download-error');
-      ipcRenderer.removeAllListeners('test-reply');
     };
-  }, [movieId]);
+  }, [movie?.Id]);
 
   useEffect(() => {
     if (movie?.MediaSources) {
@@ -152,6 +178,10 @@ function MovieDetails({ movieId, onBack, onPlay }) {
 
   const handleDownload = async () => {
     try {
+      // Show directory selection dialog
+      const selectedPath = await ipcRenderer.invoke('get-download-path');
+      if (!selectedPath) return;
+      
       console.log('Starting download...');
       setIsDownloading(true);
       setError(null);
@@ -165,14 +195,14 @@ function MovieDetails({ movieId, onBack, onPlay }) {
       
       console.log('Download URL:', downloadUrl);
       const headers = await jellyfinApi.getAuthHeaders();
-      console.log('Headers:', headers);
-
+  
       ipcRenderer.send('download-media', {
         url: downloadUrl,
         filename: `${movie.Name} (${movie.ProductionYear}).mp4`,
-        headers: headers
+        headers: headers,
+        movieId: movie.Id // Add this to identify the movie
       });
-
+  
     } catch (error) {
       console.error('Failed to start download:', error);
       setError('Failed to start download: ' + error.message);
@@ -340,14 +370,22 @@ function MovieDetails({ movieId, onBack, onPlay }) {
                 <Button
                   variant="contained"
                   size="large"
-                  startIcon={<Download />}
-                  sx={{ px: 4 }}
+                  startIcon={isDownloaded ? <CheckCircle /> : <Download />}
+                  sx={{ 
+                    px: 4,
+                    bgcolor: isDownloaded ? 'success.main' : 'primary.main',
+                    '&:hover': {
+                      bgcolor: isDownloaded ? 'success.dark' : 'primary.dark',
+                    }
+                  }}
                   disabled={isDownloading}
-                  onClick={handleDownload}
+                  onClick={isDownloaded ? () => window.open(downloadPath, 'explorer') : handleDownload}
                 >
                   {isDownloading 
-                    ? `DOWNLOADING ${downloadProgress.toFixed(1)}%` 
-                    : 'DOWNLOAD'}
+                    ? `DOWNLOADING ${downloadProgress.toFixed(1)}%`
+                    : isDownloaded 
+                      ? 'DOWNLOADED'
+                      : 'DOWNLOAD'}
                 </Button>
                 <Button
                   variant="contained"

@@ -80,12 +80,46 @@ function Settings() {
   }, []);
 
   const handleSelectDownloadPath = async () => {
-    const path = await ipcRenderer.invoke('select-directory');
-    if (path) {
-      setDownloadPath(path);
-      localStorage.setItem('downloadPath', path);
+    try {
+      const path = await ipcRenderer.invoke('select-directory');
+      if (path) {
+        console.log('Selected download path:', path);
+        setDownloadPath(path);
+        localStorage.setItem('downloadPath', path);
+        
+        // Also save it to electron-store via main process
+        await ipcRenderer.invoke('set-download-path', path);
+        
+        // Update stats for new location
+        const stats = await ipcRenderer.invoke('get-downloads-size');
+        setDownloadStats(stats);
+      }
+    } catch (error) {
+      console.error('Failed to set download path:', error);
+      setError('Failed to set download path');
     }
   };
+
+  // Add this useEffect to load download stats
+  useEffect(() => {
+    const loadDownloadInfo = async () => {
+      try {
+        // Get saved download path
+        const savedPath = await ipcRenderer.invoke('get-download-path');
+        if (savedPath) {
+          setDownloadPath(savedPath);
+        }
+
+        // Get download stats
+        const stats = await ipcRenderer.invoke('get-downloads-size');
+        setDownloadStats(stats);
+      } catch (error) {
+        console.error('Failed to load download info:', error);
+      }
+    };
+
+    loadDownloadInfo();
+  }, []);
 
   const handleClearDownloads = async () => {
     setLoading(true);
@@ -244,23 +278,29 @@ function Settings() {
               <Typography>
                 {downloadPath || 'Default location'}
               </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {downloadStats.count} files ({downloadStats.size})
+              </Typography>
             </Box>
 
-            <Button
-              variant="outlined"
-              onClick={handleSelectDownloadPath}
-            >
-              Change Download Location
-            </Button>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="outlined"
+                onClick={handleSelectDownloadPath}
+              >
+                Change Download Location
+              </Button>
 
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<Trash2 />}
-              onClick={() => setClearDownloadsDialog(true)}
-            >
-              Clear All Downloads
-            </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<Trash2 />}
+                onClick={() => setClearDownloadsDialog(true)}
+                disabled={downloadStats.count === 0}
+              >
+                Clear All Downloads
+              </Button>
+            </Stack>
           </Stack>
         </Paper>
 
