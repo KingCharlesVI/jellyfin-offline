@@ -1,10 +1,14 @@
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
+const path = require('path');
+
+const ICON_PATH = path.resolve(__dirname, 'assets', 'icon');
+const ICON_ICO_PATH = path.resolve(__dirname, 'assets', 'icon.ico');
 
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: './assets/logo',
+    icon: ICON_PATH,
     executableName: 'Jelly-To-Go'
   },
   rebuildConfig: {},
@@ -15,7 +19,7 @@ module.exports = {
         name: 'jellyfin_offline',
         authors: 'KingCharlesVI',
         description: 'Jelly To Go Client',
-        setupIcon: './assets/icon.ico',
+        setupIcon: ICON_ICO_PATH,
         iconUrl: 'https://raw.githubusercontent.com/KingCharlesVI/jellyfin-offline/master/assets/icon.ico',
         setupExe: 'JellyToGo-Setup.exe',
         shortcuts: [
