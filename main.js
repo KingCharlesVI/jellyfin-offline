@@ -29,8 +29,6 @@ function createWindow() {
   // Store the default menu
   menu = Menu.getApplicationMenu();
 
-  mainWindow.webContents.openDevTools();
-
   mainWindow.loadFile(path.join(__dirname, 'public', 'index.html'));
 }
 
