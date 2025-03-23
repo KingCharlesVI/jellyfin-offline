@@ -387,18 +387,6 @@ function MovieDetails({ movieId, onBack, onPlay }) {
                       ? 'DOWNLOADED'
                       : 'DOWNLOAD'}
                 </Button>
-                <Button
-                  variant="contained"
-                  size="large"
-                  sx={{ px: 4 }}
-                  onClick={() => {
-                    console.log('Test button clicked');
-                    alert('Button clicked');
-                    ipcRenderer.send('test-message', 'Hello from renderer');
-                  }}
-                >
-                  TEST IPC
-                </Button>
                 <IconButton 
                   onClick={handleFavoriteClick}
                   sx={{ 

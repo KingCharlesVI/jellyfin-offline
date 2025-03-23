@@ -14,9 +14,11 @@ import {
   Rating,
   CircularProgress,
   InputAdornment,
-  Chip
+  Chip,
+  Pagination,
+  Button
 } from '@mui/material';
-import { Search } from 'lucide-react';
+import { Search, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import jellyfinApi from '../../services/jellyfinApi';  // Add this import
 
 const SORT_OPTIONS = [
@@ -34,6 +36,9 @@ const FILTER_OPTIONS = [
   { value: 'played', label: 'Watched' },
   { value: 'unplayed', label: 'Unwatched' }
 ];
+
+// Items per page options
+const ITEMS_PER_PAGE_OPTIONS = [12, 24, 48, 96];
 
 function MediaCard({ item, onSelect }) {
   const [isHovered, setIsHovered] = useState(false);
@@ -182,19 +187,31 @@ function MediaCard({ item, onSelect }) {
 }
 
 function Library({ onMovieSelect }) {
-
   console.log('Library component is rendering');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [totalItems, setTotalItems] = useState(0);
   const [filters, setFilters] = useState({
     sort: 'SortName',
     filter: 'all',
     search: ''
   });
+  
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(24);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
+    // Reset to page 1 when filters change
+    setPage(1);
     loadLibraryItems();
-  }, [filters]);
+  }, [filters, itemsPerPage]);
+
+  // Effect for handling pagination changes
+  useEffect(() => {
+    loadLibraryItems();
+  }, [page]);
 
   const loadLibraryItems = async () => {
     try {
@@ -203,7 +220,10 @@ function Library({ onMovieSelect }) {
         sortBy: filters.sort,
         sortOrder: 'Ascending',
         includeItemTypes: 'Movie',
-        searchTerm: filters.search
+        searchTerm: filters.search,
+        // Pagination parameters
+        startIndex: (page - 1) * itemsPerPage,
+        limit: itemsPerPage
       };
 
       // Add specific filters
@@ -219,11 +239,24 @@ function Library({ onMovieSelect }) {
 
       const result = await jellyfinApi.getItems(params);
       setItems(result.Items);
+      setTotalItems(result.TotalRecordCount);
+      setTotalPages(Math.ceil(result.TotalRecordCount / itemsPerPage));
     } catch (error) {
       console.error('Failed to load library:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle page change
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  // Handle items per page change
+  const handleItemsPerPageChange = (event) => {
+    setItemsPerPage(event.target.value);
+    setPage(1); // Reset to first page when changing items per page
   };
 
   return (
@@ -286,16 +319,85 @@ function Library({ onMovieSelect }) {
             <CircularProgress />
           </Box>
         ) : (
-          <Grid container spacing={2}>
-            {items.map((item) => (
-              <Grid item key={item.Id} xs={6} sm={4} md={3} lg={2}>
-                <MediaCard 
-                  item={item} 
-                  onSelect={onMovieSelect}
+          <>
+            <Grid container spacing={2}>
+              {items.map((item) => (
+                <Grid item key={item.Id} xs={6} sm={4} md={3} lg={2}>
+                  <MediaCard 
+                    item={item} 
+                    onSelect={onMovieSelect}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+
+            {/* Pagination Controls */}
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mt: 3,
+                pt: 2,
+                borderTop: '1px solid',
+                borderColor: 'divider'
+              }}
+            >
+              {/* Items per page selector */}
+              <FormControl sx={{ minWidth: 100 }}>
+                <Select
+                  value={itemsPerPage}
+                  size="small"
+                  onChange={handleItemsPerPageChange}
+                  displayEmpty
+                  renderValue={(value) => `${value} items`}
+                >
+                  {ITEMS_PER_PAGE_OPTIONS.map(option => (
+                    <MenuItem key={option} value={option}>
+                      {option} items
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {/* Status text */}
+              <Typography variant="body2" color="text.secondary">
+                Showing {(page - 1) * itemsPerPage + 1} - {Math.min(page * itemsPerPage, totalItems)} of {totalItems} items
+              </Typography>
+
+              {/* Pagination component */}
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Button
+                  disabled={page === 1}
+                  onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+                  startIcon={<ChevronLeft size={16} />}
+                  size="small"
+                >
+                  Previous
+                </Button>
+                
+                <Pagination 
+                  count={totalPages} 
+                  page={page} 
+                  onChange={handlePageChange}
+                  size="small"
+                  siblingCount={1}
+                  boundaryCount={1}
+                  hideNextButton
+                  hidePrevButton
                 />
-              </Grid>
-            ))}
-          </Grid>
+                
+                <Button
+                  disabled={page === totalPages}
+                  onClick={() => setPage(prev => Math.min(prev + 1, totalPages))}
+                  endIcon={<ChevronRight size={16} />}
+                  size="small"
+                >
+                  Next
+                </Button>
+              </Stack>
+            </Box>
+          </>
         )}
       </Stack>
     </Box>
